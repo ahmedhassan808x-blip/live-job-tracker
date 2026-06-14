@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Search Command Center — Live</title>
+<style>
+  :root{
+    --ink:#16263D; --ink-soft:#44546A; --ink-faint:#8595AB;
+    --paper:#FAFAF8; --card:#FFFFFF; --line:#E4E7EC;
+    --gold:#B57E1E; --gold-soft:#F6EDDA;
+    --green:#1E7D5A; --green-soft:#E3F2EB;
+    --red:#B23A2F; --red-soft:#F8E7E4;
+    --blue:#2C5F9E; --blue-soft:#E6EEF7; --amber:#9A6A12;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--paper);color:var(--ink);font-size:14px}
+  header{background:var(--ink);color:#fff;padding:22px 28px}
+  h1{font-family:Georgia,serif;font-weight:600;font-size:21px}
+  .h-sub{font-size:12px;color:#9DB0C9;margin-top:4px}
+  nav{background:var(--ink);padding:0 28px;display:flex;gap:4px;border-bottom:3px solid var(--gold);overflow-x:auto}
+  nav button{background:none;border:none;color:#9DB0C9;font-size:13px;font-weight:600;padding:12px 16px;cursor:pointer;border-radius:6px 6px 0 0;white-space:nowrap}
+  nav button.active{background:var(--paper);color:var(--ink)}
+  main{padding:24px 28px;max-width:1100px;margin:0 auto}
+  .panel{display:none}.panel.active{display:block}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+  .card h3{font-family:Georgia,serif;font-size:15px;margin-bottom:6px}
+  .status-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;background:var(--blue-soft);border:1px solid #C7D8EC;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;color:var(--ink-soft)}
+  .btn{background:var(--ink);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:600;font-size:12.5px;cursor:pointer}
+  .btn:hover{background:#22375A}.btn:disabled{opacity:.5;cursor:wait}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .job{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .job:last-child{border-bottom:none}
+  .job .jm b{display:block}.job .jm span{font-size:12px;color:var(--ink-faint)}
+  a.site{color:var(--blue);text-decoration:none;font-weight:600;font-size:12px}
+  a.site:hover{text-decoration:underline}
+  .pill{display:inline-block;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--green-soft);color:var(--green);margin-left:6px}
+  .empty{color:var(--ink-faint);padding:20px;text-align:center;font-size:13px}
+  .spin{display:inline-block;animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+  .note{font-size:12px;color:var(--ink-faint);margin-top:8px;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <h1>Job Search Command Center — Live</h1>
+  <div class="h-sub">Connected to your JSearch backend · Saudi · UAE · Singapore · Malaysia</div>
+</header>
+<nav>
+  <button class="active" data-tab="live" onclick="tab(this)">Live Openings</button>
+  <button data-tab="setup" onclick="tab(this)">Setup</button>
+</nav>
+<main>
+
+<div class="panel active" id="p-live">
+  <div class="status-bar">
+    <span id="status-text">Connecting to backend…</span>
+    <button class="btn" id="refresh-btn" onclick="loadJobs()">⟳ Refresh now</button>
+  </div>
+  <div class="toolbar">
+    <input type="text" id="q" placeholder="Filter by title or company…" oninput="render()" style="flex:1;min-width:160px">
+    <select id="country" onchange="render()"><option value="">All countries</option>
+      <option>Saudi Arabia</option><option>UAE</option><option>Singapore</option><option>Malaysia</option></select>
+  </div>
+  <div id="jobs"></div>
+</div>
+
+<div class="panel" id="p-setup">
+  <div class="card">
+    <h3>Connect your backend</h3>
+    <p class="note">Once you've deployed the Python backend on Render (see README), paste your backend URL below and click Save. It's stored in this page only.</p>
+    <div class="toolbar" style="margin-top:10px">
+      <input type="text" id="backend-input" placeholder="https://your-app.onrender.com" style="flex:1;min-width:220px">
+      <button class="btn" onclick="saveBackend()">Save & connect</button>
+    </div>
+    <p class="note" id="saved-note"></p>
+  </div>
+  <div class="card">
+    <h3>How the live data works</h3>
+    <p class="note">Your backend calls the JSearch API every 6 hours and caches recent finance openings across the 4 countries. This page reads that cached data. Because the <b>backend</b> (not your browser) talks to the job API, there are no CORS or scraping limits — this is the real automation the standalone file couldn't do.<br><br>
+    Free-tier note: Render sleeps the service after ~15 min idle, so the first load after a while may take 30–60s to wake. Then it's fast.</p>
+  </div>
+</div>
+
+</main>
+<script>
+// ====== CONFIG ======
+// After deploying, either edit this line OR use the Setup tab to set it.
+let BACKEND_URL = "https://YOUR-RENDER-URL.onrender.com";
+
+let JOBS = {}, UPDATED = null;
+
+function tab(btn){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('p-'+btn.dataset.tab).classList.add('active');
+}
+
+// Persist backend URL in this page (in-memory variable + storage if available)
+function saveBackend(){
+  const v=document.getElementById('backend-input').value.trim().replace(/\/$/,'');
+  if(!v) return;
+  BACKEND_URL=v;
+  try{ if(window.storage) window.storage.set('backend_url', v, false); }catch(e){}
+  document.getElementById('saved-note').textContent="Saved: "+v+" — go to Live Openings and Refresh.";
+  loadJobs();
+}
+
+async function loadJobs(){
+  const st=document.getElementById('status-text');
+  const btn=document.getElementById('refresh-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spin">⟳</span> Loading…';
+  st.textContent="Fetching live jobs from your backend…";
+  if(BACKEND_URL.includes("YOUR-RENDER-URL")){
+    st.textContent="⚠ No backend connected yet — go to the Setup tab and paste your Render URL.";
+    btn.disabled=false; btn.innerHTML='⟳ Refresh now';
+    document.getElementById('jobs').innerHTML='<div class="empty">Deploy the backend (see README), then connect it in Setup.</div>';
+    return;
+  }
+  try{
+    const r=await fetch(BACKEND_URL.replace(/\/$/,'')+"/api/jobs");
+    const data=await r.json();
+    JOBS=data.data||{}; UPDATED=data.updated_at;
+    if(data.status==="no_api_key"){
+      st.textContent="⚠ Backend is running but has no API key set. Add RAPIDAPI_KEY in Render.";
+    } else {
+      const total=Object.values(JOBS).reduce((s,a)=>s+a.length,0);
+      st.textContent=`✓ ${total} live jobs · last refreshed ${UPDATED||'—'} (auto-refreshes every 6h)`;
+    }
+    render();
+  }catch(err){
+    st.textContent="⚠ Couldn't reach the backend. If it just woke from sleep, wait 30–60s and Refresh again.";
+    document.getElementById('jobs').innerHTML='<div class="empty">Backend unreachable. Check the URL in Setup and that the Render service is live.</div>';
+  }
+  btn.disabled=false; btn.innerHTML='⟳ Refresh now';
+}
+
+function render(){
+  const q=(document.getElementById('q').value||'').toLowerCase();
+  const fc=document.getElementById('country').value;
+  let html='';
+  Object.entries(JOBS).forEach(([country,jobs])=>{
+    if(fc&&country!==fc) return;
+    const filtered=jobs.filter(j=>!q||j.title.toLowerCase().includes(q)||j.company.toLowerCase().includes(q));
+    if(!filtered.length) return;
+    html+=`<div class="card"><h3>${country} <span style="font-weight:400;color:var(--ink-faint);font-size:12px">(${filtered.length})</span></h3>`;
+    filtered.forEach(j=>{
+      html+=`<div class="job"><div class="jm"><b>${esc(j.title)}${j.remote?'<span class="pill">Remote</span>':''}</b>
+        <span>${esc(j.company)} · ${esc(j.city)} ${j.posted?'· posted '+j.posted:''} ${j.type?'· '+esc(j.type):''}</span></div>
+        <a class="site" href="${j.url}" target="_blank" rel="noopener">Apply →</a></div>`;
+    });
+    html+=`</div>`;
+  });
+  document.getElementById('jobs').innerHTML=html||'<div class="empty">No jobs match your filters (or backend still warming up).</div>';
+}
+
+function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]))}
+
+// try restoring saved backend url
+(async function(){
+  try{ if(window.storage){ const r=await window.storage.get('backend_url'); if(r&&r.value){ BACKEND_URL=r.value; document.getElementById('backend-input').value=r.value; } } }catch(e){}
+  loadJobs();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# Render.com free deployment.
+# 1. Push this folder to a GitHub repo.
+# 2. On Render: New + > Blueprint > select the repo.
+# 3. In the service's Environment tab, add RAPIDAPI_KEY = your JSearch key.
+services:
+  - type: web
+    name: ahmed-job-tracker
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: RAPIDAPI_KEY
+        sync: false
