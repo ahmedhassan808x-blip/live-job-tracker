@@ -131,12 +131,35 @@ def background_loop():
 # ---- API endpoints ----
 @app.route("/api/jobs")
 def api_jobs():
+    # On Render's free tier the startup background fetch can fail to run.
+    # So if the cache is still empty, fetch right now (on demand) before answering.
+    with CACHE_LOCK:
+        is_empty = not CACHE["data"]
+    if is_empty and RAPIDAPI_KEY:
+        try:
+            refresh_all()
+        except Exception as e:
+            print(f"[on-demand fetch error] {e}")
     with CACHE_LOCK:
         return jsonify({
             "updated_at": CACHE["updated_at"],
             "status": CACHE["status"],
             "data": CACHE["data"],
         })
+
+
+@app.route("/api/refresh")
+def api_refresh():
+    """Manually trigger a fresh fetch (used by the Refresh button)."""
+    if not RAPIDAPI_KEY:
+        return jsonify({"ok": False, "error": "no_api_key"})
+    try:
+        refresh_all()
+        with CACHE_LOCK:
+            return jsonify({"ok": True, "updated_at": CACHE["updated_at"],
+                            "total": sum(len(v) for v in CACHE["data"].values())})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
 
 
 @app.route("/api/health")
