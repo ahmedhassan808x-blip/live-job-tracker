@@ -75,13 +75,16 @@ def fetch_one(query, country_code):
 
     jobs = []
     for j in results:
+        if not isinstance(j, dict):
+            continue
+        posted = j.get("job_posted_at_datetime_utc") or ""
         jobs.append({
-            "title": j.get("job_title", ""),
-            "company": j.get("employer_name", ""),
+            "title": j.get("job_title") or "",
+            "company": j.get("employer_name") or "",
             "city": j.get("job_city") or j.get("job_country") or "",
-            "posted": j.get("job_posted_at_datetime_utc", "")[:10],
-            "type": j.get("job_employment_type", ""),
-            "url": j.get("job_apply_link") or j.get("job_google_link", ""),
+            "posted": posted[:10],
+            "type": j.get("job_employment_type") or "",
+            "url": j.get("job_apply_link") or j.get("job_google_link") or "",
             "remote": j.get("job_is_remote", False),
             "query": query,
         })
